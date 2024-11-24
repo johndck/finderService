@@ -1,27 +1,46 @@
-worker_processes 1;
+daemon off;
+worker_processes auto;
 
 events {
-  worker_connections 1024;
+    use epoll;
+    accept_mutex on;
+    worker_connections 1024;
 }
 
 http {
-  include       mime.types;
-  default_type  application/octet-stream;
-  sendfile        on;
-  keepalive_timeout  65;
+    include mime.types;
+    default_type application/octet-stream;
 
-  server {
-    listen       <%= ENV["PORT"] %>;
-    server_name  localhost;
-    root         <%= ENV["HOME"] %>;
+    # Optimize for static file serving
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    gzip on;
+    
+    server {
+        listen <%= ENV["PORT"] %>;
+        server_name _;
+        
+        root /app;  # This points to the root directory where your static files are
+        index index.html;
+        
+        # Handle static file requests
+        location / {
+            try_files $uri $uri/ /index.html =404;
+            expires 30d;
+            add_header Cache-Control "public, no-transform";
+        }
 
-    location / {
-      try_files $uri $uri/ =404;
+        # Serve CSS files with correct MIME type
+        location ~* \.css$ {
+            add_header Content-Type text/css;
+            expires 30d;
+            add_header Cache-Control "public, no-transform";
+        }
+
+        # Error pages
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
     }
-
-    error_page 500 502 503 504 /50x.html;
-    location = /50x.html {
-      root <%= ENV["HOME"] %>;
-    }
-  }
 }
